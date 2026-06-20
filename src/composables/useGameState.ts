@@ -1,5 +1,5 @@
 import { reactive, computed, watch } from 'vue'
-import type { GameState, Bird, Berry, GrowthStage, Personality, BerryType, Weather, GameScore } from '@/types/game'
+import type { GameState, Bird, Berry, GrowthStage, Personality, PhysiqueTendency, BerryType, Weather, GameScore } from '@/types/game'
 import {
   ATTR_MIN, ATTR_MAX, DEATH_THRESHOLD,
   STAGE_DURATION, FOOD_NEED_MULTIPLIER,
@@ -8,6 +8,8 @@ import {
   BERRY_VALUES, WEATHER_CHANGE_INTERVAL, WEATHER_EFFECTS,
   DAY_DURATION, INITIAL_FOOD, MIN_EGGS, MAX_EGGS,
   MAX_BREEDING_ROUNDS, BIRD_NAMES,
+  PERSONALITY_INHERIT_CHANCE, INHERITANCE_BONUS_PER_TRAIT,
+  PHYSIQUE_TENDENCY_NAMES, PERSONALITY_NAMES,
 } from '@/utils/constants'
 import { randomInt, randomFloat, clamp, randomChoice, generateId, chance } from '@/utils/random'
 import { saveGame, loadGame, clearSave } from '@/utils/storage'
@@ -25,6 +27,7 @@ const createInitialState = (): GameState => ({
   totalDied: 0,
   breedingCount: 0,
   maxBreedingRounds: MAX_BREEDING_ROUNDS,
+  inheritanceCount: 0,
   eventLog: [],
 })
 
@@ -58,8 +61,25 @@ const generatePersonality = (hatchDuration: number, avgHatchDuration: number): P
   return randomChoice(PERSONALITIES)
 }
 
-const createEgg = (index: number): Bird => {
+interface InheritanceData {
+  parentPersonality: Personality
+  physiqueTendency: PhysiqueTendency
+  parentName: string
+}
+
+const determinePhysiqueTendency = (parents: Bird[]): PhysiqueTendency => {
+  const avgHealth = parents.reduce((s, p) => s + p.health, 0) / parents.length
+  if (avgHealth >= 75) return 'sturdy'
+  if (avgHealth <= 45) return 'frail'
+  return 'balanced'
+}
+
+const createEgg = (index: number, inheritance?: InheritanceData): Bird => {
   const hatchDuration = randomInt(15000, 35000)
+  let baseHealth = randomInt(85, 100)
+  if (inheritance?.physiqueTendency === 'sturdy') baseHealth = randomInt(90, 100)
+  else if (inheritance?.physiqueTendency === 'frail') baseHealth = randomInt(70, 90)
+
   return {
     id: generateId(),
     name: `蛋${index + 1}号`,
@@ -67,8 +87,8 @@ const createEgg = (index: number): Bird => {
     stageProgress: 0,
     hunger: 100,
     fear: randomInt(10, 30),
-    health: randomInt(85, 100),
-    personality: 'gentle',
+    health: baseHealth,
+    personality: inheritance?.parentPersonality ?? 'gentle',
     hatchDuration,
     hatchTimeLeft: hatchDuration,
     isAway: false,
@@ -76,6 +96,9 @@ const createEgg = (index: number): Bird => {
     isDead: false,
     feedingCount: 0,
     lastFedAt: 0,
+    parentPersonality: inheritance?.parentPersonality,
+    physiqueTendency: inheritance?.physiqueTendency,
+    inheritedFrom: inheritance?.parentName,
   }
 }
 
@@ -185,11 +208,14 @@ const updateBird = (bird: Bird, deltaMs: number, weatherEffect: ReturnType<typeo
   bird.hunger = clamp(bird.hunger - hungerDecay, ATTR_MIN, ATTR_MAX)
 
   if (bird.isSick) {
-    bird.health = clamp(bird.health - 0.8 * (deltaMs / 1000), ATTR_MIN, ATTR_MAX)
+    const sickDmgMod = bird.physiqueTendency === 'sturdy' ? 0.6 : bird.physiqueTendency === 'frail' ? 1.2 : 1
+    bird.health = clamp(bird.health - 0.8 * sickDmgMod * (deltaMs / 1000), ATTR_MIN, ATTR_MAX)
   } else if (bird.hunger < 30) {
-    bird.health = clamp(bird.health - 0.4 * (deltaMs / 1000), ATTR_MIN, ATTR_MAX)
+    const hungerDmgMod = bird.physiqueTendency === 'sturdy' ? 0.7 : bird.physiqueTendency === 'frail' ? 1.3 : 1
+    bird.health = clamp(bird.health - 0.4 * hungerDmgMod * (deltaMs / 1000), ATTR_MIN, ATTR_MAX)
   } else if (bird.hunger > 70 && bird.fear < 50) {
-    bird.health = clamp(bird.health + HEALTH_RECOVERY_RATE * weatherEffect.healthMod * (deltaMs / 1000), ATTR_MIN, ATTR_MAX)
+    const recoveryMod = bird.physiqueTendency === 'sturdy' ? 1.3 : bird.physiqueTendency === 'frail' ? 0.7 : 1
+    bird.health = clamp(bird.health + HEALTH_RECOVERY_RATE * weatherEffect.healthMod * recoveryMod * (deltaMs / 1000), ATTR_MIN, ATTR_MAX)
   }
 
   if (weatherEffect.fearMod > 1) {
@@ -200,7 +226,8 @@ const updateBird = (bird: Bird, deltaMs: number, weatherEffect: ReturnType<typeo
 
   if (weatherEffect.awayChance && !bird.isAway && bird.stage !== 'chick') {
     const personalityMod = bird.personality === 'bold' ? 0.3 : bird.personality === 'shy' ? 1.5 : 1
-    if (chance(weatherEffect.awayChance * personalityMod * (deltaMs / 10000))) {
+    const physiqueMod = bird.physiqueTendency === 'sturdy' ? 0.8 : bird.physiqueTendency === 'frail' ? 1.2 : 1
+    if (chance(weatherEffect.awayChance * personalityMod * physiqueMod * (deltaMs / 10000))) {
       bird.isAway = true
       bird.awayUntil = Date.now() + randomInt(8000, 20000)
       addEventLog(`💨 ${bird.name} 被天气吓跑，暂时离巢了...`, 'warning')
@@ -209,7 +236,8 @@ const updateBird = (bird: Bird, deltaMs: number, weatherEffect: ReturnType<typeo
 
   if (weatherEffect.sickChance && !bird.isSick && !bird.isAway) {
     const personalityMod = bird.personality === 'stubborn' ? 0.7 : bird.personality === 'gentle' ? 1.3 : 1
-    if (chance(weatherEffect.sickChance * personalityMod * (deltaMs / 10000))) {
+    const physiqueMod = bird.physiqueTendency === 'sturdy' ? 0.6 : bird.physiqueTendency === 'frail' ? 1.4 : 1
+    if (chance(weatherEffect.sickChance * personalityMod * physiqueMod * (deltaMs / 10000))) {
       bird.isSick = true
       bird.sickUntil = Date.now() + randomInt(10000, 25000)
       addEventLog(`🤒 ${bird.name} 生病了，需要好好照顾！`, 'warning')
@@ -241,17 +269,48 @@ const hatchBird = (bird: Bird) => {
   const allBirds = state.birds
   const avgHatch = allBirds.reduce((s, b) => s + b.hatchDuration, 0) / allBirds.length
 
+  let finalPersonality: Personality
+  if (bird.parentPersonality && chance(PERSONALITY_INHERIT_CHANCE)) {
+    finalPersonality = bird.parentPersonality
+  } else {
+    finalPersonality = generatePersonality(bird.hatchDuration, avgHatch)
+  }
+
   bird.stage = 'chick'
   bird.stageProgress = 0
-  bird.personality = generatePersonality(bird.hatchDuration, avgHatch)
+  bird.personality = finalPersonality
   bird.name = pickName()
-  bird.hunger = randomInt(50, 70)
-  bird.fear = randomInt(20, 50)
-  bird.health = randomInt(75, 95)
+
+  let baseHunger = randomInt(50, 70)
+  let baseFear = randomInt(20, 50)
+  let baseHealth = randomInt(75, 95)
+
+  if (bird.physiqueTendency === 'sturdy') {
+    baseHealth = randomInt(85, 100)
+    baseHunger = randomInt(55, 75)
+    baseFear = randomInt(10, 40)
+  } else if (bird.physiqueTendency === 'frail') {
+    baseHealth = randomInt(60, 85)
+    baseHunger = randomInt(40, 60)
+    baseFear = randomInt(30, 60)
+  }
+
+  bird.hunger = baseHunger
+  bird.fear = baseFear
+  bird.health = baseHealth
   bird.justHatched = true
   state.totalHatched++
 
-  addEventLog(`🥳 ${bird.name} 破壳啦！性格：${bird.personality}`, 'success')
+  const inheritanceParts: string[] = []
+  if (bird.parentPersonality && finalPersonality === bird.parentPersonality) {
+    inheritanceParts.push(`继承${PERSONALITY_NAMES[bird.parentPersonality]}性格`)
+  }
+  if (bird.physiqueTendency) {
+    inheritanceParts.push(`${PHYSIQUE_TENDENCY_NAMES[bird.physiqueTendency]}`)
+  }
+  const inheritanceInfo = inheritanceParts.length > 0 ? ` | 传承：${inheritanceParts.join('、')}` : ''
+
+  addEventLog(`🥳 ${bird.name} 破壳啦！性格：${bird.personality}${inheritanceInfo}`, 'success')
 }
 
 const growBird = (bird: Bird) => {
@@ -392,12 +451,36 @@ const keepAndBreed = () => {
     b.hunger = clamp(b.hunger - randomInt(10, 20), ATTR_MIN, ATTR_MAX)
   })
 
-  const newEggCount = randomInt(MIN_EGGS, MAX_EGGS)
-  for (let i = 0; i < newEggCount; i++) {
-    state.birds.push(createEgg(state.birds.length))
+  const parentA = randomChoice(adults)
+  const otherAdults = adults.filter(b => b.id !== parentA.id)
+  const parentB = otherAdults.length > 0 ? randomChoice(otherAdults) : parentA
+
+  const physiqueTendency = determinePhysiqueTendency([parentA, parentB])
+  const parentPersonality = chance(0.5) ? parentA.personality : parentB.personality
+  const parentName = `${parentA.name}和${parentB.name}`
+
+  const inheritance: InheritanceData = {
+    parentPersonality,
+    physiqueTendency,
+    parentName,
   }
 
-  addEventLog(`💝 成鸟们产下了 ${newEggCount} 颗新蛋！第 ${state.breedingCount} 窝`, 'success')
+  const newEggCount = randomInt(MIN_EGGS, MAX_EGGS)
+  let inheritedCount = 0
+  for (let i = 0; i < newEggCount; i++) {
+    const willInherit = chance(PERSONALITY_INHERIT_CHANCE)
+    const eggInheritance = willInherit ? inheritance : undefined
+    if (willInherit) inheritedCount++
+    state.birds.push(createEgg(state.birds.length, eggInheritance))
+  }
+
+  state.inheritanceCount += inheritedCount
+
+  addEventLog(`💝 ${parentA.name}和${parentB.name} 产下了 ${newEggCount} 颗新蛋！第 ${state.breedingCount} 窝`, 'success')
+  if (inheritedCount > 0) {
+    addEventLog(`🧬 其中 ${inheritedCount} 颗蛋承载了亲代的传承（性格：${PERSONALITY_NAMES[parentPersonality]}，${PHYSIQUE_TENDENCY_NAMES[physiqueTendency]}）`, 'info')
+  }
+
   state.phase = 'playing'
 }
 
@@ -422,11 +505,14 @@ const calculateScore = (): GameScore => {
     ? aliveBirds.reduce((s, b) => s + (b.feedingCount > 10 ? 5 : 2), 0)
     : 0
 
+  const inheritanceBonus = state.inheritanceCount * INHERITANCE_BONUS_PER_TRAIT
+
   const totalScore = Math.round(
     survivalRate * 40 +
     avgHealth * 0.3 +
     breedingBonus +
-    personalityBonus
+    personalityBonus +
+    inheritanceBonus
   )
 
   let stars = 1
@@ -447,6 +533,7 @@ const calculateScore = (): GameScore => {
     avgHealth: Math.round(avgHealth),
     breedingBonus,
     personalityBonus,
+    inheritanceBonus,
     stars,
     rank,
   }

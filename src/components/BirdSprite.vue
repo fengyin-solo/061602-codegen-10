@@ -12,6 +12,7 @@ const props = defineProps<{
   justGrew?: boolean
   justFed?: boolean
   personality?: Personality
+  hasInheritance?: boolean
 }>()
 
 const stageClass = computed(() => {
@@ -65,6 +66,10 @@ const birdEmoji = computed(() => {
     >
       <span class="drop-shadow-lg">{{ birdEmoji }}</span>
 
+      <span
+        v-if="hasInheritance && stage === 'egg' && !isDead"
+        class="absolute -top-2 -left-2 text-sm animate-sparkle"
+      >🧬</span>
       <span
         v-if="isSick && !isDead"
         class="absolute -top-2 -right-1 text-lg animate-bounce-slow"

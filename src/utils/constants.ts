@@ -1,4 +1,4 @@
-import type { Weather, WeatherEffect, BerryType, GrowthStage, Personality } from '@/types/game'
+import type { Weather, WeatherEffect, BerryType, GrowthStage, Personality, PhysiqueTendency } from '@/types/game'
 
 export const ATTR_MIN = 0
 export const ATTR_MAX = 100
@@ -98,6 +98,22 @@ export const PERSONALITY_EMOJI: Record<Personality, string> = {
   curious: '🌟',
   stubborn: '😤',
 }
+
+export const PERSONALITY_INHERIT_CHANCE = 0.6
+
+export const PHYSIQUE_TENDENCY_NAMES: Record<PhysiqueTendency, string> = {
+  sturdy: '健壮体格',
+  balanced: '均衡体格',
+  frail: '柔弱体格',
+}
+
+export const PHYSIQUE_TENDENCY_EMOJI: Record<PhysiqueTendency, string> = {
+  sturdy: '🛡️',
+  balanced: '⚖️',
+  frail: '🍃',
+}
+
+export const INHERITANCE_BONUS_PER_TRAIT = 5
 
 export const DAY_DURATION = 60000
 export const INITIAL_FOOD = 30

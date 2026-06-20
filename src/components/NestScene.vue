@@ -116,6 +116,7 @@ const displayBirds = computed(() => {
             :just-grew="bird.justGrew"
             :just-fed="bird.justFed"
             :personality="bird.personality"
+            :has-inheritance="!!bird.parentPersonality || !!bird.physiqueTendency"
           />
           <div
             v-if="selectedBirdId === bird.id && !bird.isDead"

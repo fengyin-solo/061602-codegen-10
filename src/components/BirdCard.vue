@@ -3,7 +3,7 @@ import { computed } from 'vue'
 import type { Bird } from '@/types/game'
 import AttributeBar from './AttributeBar.vue'
 import BirdSprite from './BirdSprite.vue'
-import { STAGE_NAMES, PERSONALITY_NAMES, PERSONALITY_EMOJI } from '@/utils/constants'
+import { STAGE_NAMES, PERSONALITY_NAMES, PERSONALITY_EMOJI, PHYSIQUE_TENDENCY_NAMES, PHYSIQUE_TENDENCY_EMOJI } from '@/utils/constants'
 
 const props = defineProps<{
   bird: Bird
@@ -54,12 +54,17 @@ const hatchProgress = computed(() => {
           :just-grew="bird.justGrew"
           :just-fed="bird.justFed"
           :personality="bird.personality"
+          :has-inheritance="!!bird.parentPersonality || !!bird.physiqueTendency"
         />
         <div class="flex flex-col items-center">
           <div class="font-display text-lg text-white font-bold">{{ bird.name }}</div>
           <div class="text-xs text-white/70">{{ STAGE_NAMES[bird.stage] }}</div>
           <div v-if="bird.stage !== 'egg' && !bird.isDead" class="text-[10px] text-amber-300 mt-0.5">
             {{ PERSONALITY_EMOJI?.[bird.personality] }} {{ PERSONALITY_NAMES[bird.personality] }}
+          </div>
+          <div v-if="bird.stage !== 'egg' && !bird.isDead && bird.physiqueTendency" class="text-[10px] text-cyan-300 mt-0.5">
+            {{ PHYSIQUE_TENDENCY_EMOJI[bird.physiqueTendency] }} {{ PHYSIQUE_TENDENCY_NAMES[bird.physiqueTendency] }}
+            <span v-if="bird.inheritedFrom" class="text-white/40">← {{ bird.inheritedFrom }}</span>
           </div>
         </div>
       </div>
@@ -74,6 +79,14 @@ const hatchProgress = computed(() => {
           />
           <div class="text-xs text-white/60 text-center py-1">
             还剩 ~{{ Math.ceil(bird.hatchTimeLeft / 1000) }} 秒孵化
+          </div>
+          <div v-if="bird.parentPersonality || bird.physiqueTendency" class="flex flex-wrap gap-1 justify-center mt-1">
+            <span v-if="bird.parentPersonality" class="px-2 py-0.5 bg-purple-500/20 text-purple-300 text-[10px] rounded-full border border-purple-400/30">
+              🧬 倾向：{{ PERSONALITY_EMOJI[bird.parentPersonality] }} {{ PERSONALITY_NAMES[bird.parentPersonality] }}
+            </span>
+            <span v-if="bird.physiqueTendency" class="px-2 py-0.5 bg-amber-500/20 text-amber-300 text-[10px] rounded-full border border-amber-400/30">
+              {{ PHYSIQUE_TENDENCY_EMOJI[bird.physiqueTendency] }} {{ PHYSIQUE_TENDENCY_NAMES[bird.physiqueTendency] }}
+            </span>
           </div>
         </template>
 

@@ -76,7 +76,7 @@ watch(
             @click="emit('breed')"
           >
             <span class="text-xl">💝</span>
-            留下配对 ({{ state.breedingCount }}/{{ state.maxBreedingRounds }})
+            留巢繁殖 ({{ state.breedingCount }}/{{ state.maxBreedingRounds }})
           </button>
           <button
             v-else
@@ -87,6 +87,9 @@ watch(
             <span class="text-xl">🏡</span>
             留下陪伴（结束）
           </button>
+        </div>
+        <div v-if="state.breedingCount < state.maxBreedingRounds" class="mt-3 text-center text-xs text-white/50">
+          🧬 留巢繁殖可传承亲代性格与体质倾向给新蛋
         </div>
       </div>
     </div>

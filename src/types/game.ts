@@ -2,6 +2,8 @@ export type GrowthStage = 'egg' | 'chick' | 'juvenile' | 'subadult' | 'adult'
 
 export type Weather = 'sunny' | 'rainy' | 'snowy' | 'stormy'
 
+export type PhysiqueTendency = 'sturdy' | 'frail' | 'balanced'
+
 export type Personality = 'bold' | 'shy' | 'gentle' | 'curious' | 'stubborn'
 
 export type BerryType = 'red' | 'blue' | 'golden'
@@ -29,6 +31,9 @@ export interface Bird {
   justHatched?: boolean
   justGrew?: boolean
   justFed?: boolean
+  parentPersonality?: Personality
+  physiqueTendency?: PhysiqueTendency
+  inheritedFrom?: string
 }
 
 export interface Berry {
@@ -53,6 +58,7 @@ export interface GameState {
   totalDied: number
   breedingCount: number
   maxBreedingRounds: number
+  inheritanceCount: number
   eventLog: { id: string; message: string; type: string; timestamp: number }[]
   score?: GameScore
   selectedBirdId?: string
@@ -64,6 +70,7 @@ export interface GameScore {
   avgHealth: number
   breedingBonus: number
   personalityBonus: number
+  inheritanceBonus: number
   stars: number
   rank: string
 }
