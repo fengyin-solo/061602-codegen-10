@@ -270,8 +270,9 @@ const hatchBird = (bird: Bird) => {
   const avgHatch = allBirds.reduce((s, b) => s + b.hatchDuration, 0) / allBirds.length
 
   let finalPersonality: Personality
-  if (bird.parentPersonality && chance(PERSONALITY_INHERIT_CHANCE)) {
-    finalPersonality = bird.parentPersonality
+  const personalityInherited = !!(bird.parentPersonality && chance(PERSONALITY_INHERIT_CHANCE))
+  if (personalityInherited) {
+    finalPersonality = bird.parentPersonality!
   } else {
     finalPersonality = generatePersonality(bird.hatchDuration, avgHatch)
   }
@@ -301,16 +302,22 @@ const hatchBird = (bird: Bird) => {
   bird.justHatched = true
   state.totalHatched++
 
-  const inheritanceParts: string[] = []
-  if (bird.parentPersonality && finalPersonality === bird.parentPersonality) {
-    inheritanceParts.push(`继承${PERSONALITY_NAMES[bird.parentPersonality]}性格`)
+  const physiqueInherited = !!bird.physiqueTendency
+  const actualInheritTraits = (personalityInherited ? 1 : 0) + (physiqueInherited ? 1 : 0)
+  if (actualInheritTraits > 0) {
+    state.inheritanceCount += actualInheritTraits
   }
-  if (bird.physiqueTendency) {
-    inheritanceParts.push(`${PHYSIQUE_TENDENCY_NAMES[bird.physiqueTendency]}`)
-  }
-  const inheritanceInfo = inheritanceParts.length > 0 ? ` | 传承：${inheritanceParts.join('、')}` : ''
 
-  addEventLog(`🥳 ${bird.name} 破壳啦！性格：${bird.personality}${inheritanceInfo}`, 'success')
+  const inheritanceParts: string[] = []
+  if (personalityInherited) {
+    inheritanceParts.push(`继承${PERSONALITY_NAMES[bird.parentPersonality!]}性格`)
+  }
+  if (physiqueInherited) {
+    inheritanceParts.push(`${PHYSIQUE_TENDENCY_NAMES[bird.physiqueTendency!]}`)
+  }
+  const inheritanceInfo = inheritanceParts.length > 0 ? ` | 🧬 传承：${inheritanceParts.join('、')}` : ''
+
+  addEventLog(`🥳 ${bird.name} 破壳啦！性格：${PERSONALITY_NAMES[bird.personality]}${inheritanceInfo}`, 'success')
 }
 
 const growBird = (bird: Bird) => {
@@ -466,19 +473,17 @@ const keepAndBreed = () => {
   }
 
   const newEggCount = randomInt(MIN_EGGS, MAX_EGGS)
-  let inheritedCount = 0
+  let potentialInheritedCount = 0
   for (let i = 0; i < newEggCount; i++) {
     const willInherit = chance(PERSONALITY_INHERIT_CHANCE)
     const eggInheritance = willInherit ? inheritance : undefined
-    if (willInherit) inheritedCount++
+    if (willInherit) potentialInheritedCount++
     state.birds.push(createEgg(state.birds.length, eggInheritance))
   }
 
-  state.inheritanceCount += inheritedCount
-
   addEventLog(`💝 ${parentA.name}和${parentB.name} 产下了 ${newEggCount} 颗新蛋！第 ${state.breedingCount} 窝`, 'success')
-  if (inheritedCount > 0) {
-    addEventLog(`🧬 其中 ${inheritedCount} 颗蛋承载了亲代的传承（性格：${PERSONALITY_NAMES[parentPersonality]}，${PHYSIQUE_TENDENCY_NAMES[physiqueTendency]}）`, 'info')
+  if (potentialInheritedCount > 0) {
+    addEventLog(`🧬 亲代可能将性格与体质传承给新蛋（性格：${PERSONALITY_NAMES[parentPersonality]}，${PHYSIQUE_TENDENCY_NAMES[physiqueTendency]}），真实结果将在破壳时揭晓~`, 'info')
   }
 
   state.phase = 'playing'
